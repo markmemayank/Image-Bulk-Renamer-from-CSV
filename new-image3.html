@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Image Renamer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <style>
+        #downloadLink {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <input type="file" id="imageFiles" accept="image/*" multiple>
+    <input type="file" id="csvFile" accept=".csv">
+    <button onclick="processFiles()">Process Files</button>
+
+    <ul id="imageList"></ul>
+    <a id="downloadLink" href="#">Download All Renamed Images</a>
+
+    <script>
+        function processFiles() {
+            const imageFiles = Array.from(document.getElementById('imageFiles').files);
+            const csvFile = document.getElementById('csvFile').files[0];
+
+            if (imageFiles.length === 0 || !csvFile) {
+                alert('Please upload images and a CSV file.');
+                return;
+            }
+
+            // Parse the CSV file
+            Papa.parse(csvFile, {
+                complete: function(results) {
+                    const titles = results.data.flat(); // Flatten to ensure all titles are accessed
+                    console.log('Parsed CSV Titles:', titles);  // Debug log to check titles
+
+                    if (titles.length !== imageFiles.length) {
+                        alert('Number of images does not match the number of titles. Please ensure they are equal.');
+                        return;
+                    }
+
+                    renameFiles(imageFiles, titles);
+                }
+            });
+        }
+
+        function renameFiles(imageFiles, titles) {
+            const promises = imageFiles.map((file, index) => {
+                const extension = file.name.split('.').pop();
+                const renamedFileName = `${titles[index]}.${extension}`;
+                
+                console.log('Renaming:', file.name, 'to', renamedFileName);  // Debug log to check renaming
+
+                // Add renamed filename to list
+                const li = document.createElement('li');
+                li.textContent = renamedFileName;
+                document.getElementById('imageList').appendChild(li);
+
+                return readFileAsArrayBuffer(file).then(data => ({
+                    name: renamedFileName,
+                    data
+                }));
+            });
+
+            Promise.all(promises).then(renamedFiles => {
+                createDownloadLink(renamedFiles);
+            });
+        }
+
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    resolve(event.target.result);
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function createDownloadLink(files) {
+            const zip = new JSZip();
+
+            files.forEach(file => {
+                zip.file(file.name, file.data);
+            });
+
+            zip.generateAsync({ type: "blob" }).then(content => {
+                const url = URL.createObjectURL(content);
+                const downloadLink = document.getElementById('downloadLink');
+                downloadLink.href = url;
+                downloadLink.download = "renamed_images.zip";
+                downloadLink.style.display = "block";
+            });
+        }
+    </script>
+</body>
+
+</html>
